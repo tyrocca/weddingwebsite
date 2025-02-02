@@ -32,6 +32,51 @@ func NewMemoryGuestRepository() repository.GuestRepository {
 	}
 }
 
+// Unique Constraints
+const NO_ID = -1
+
+// No two contacts can have the same email or phone number
+func checkContactConflict(contacts map[int]domain.GuestContact, email, phone string, allowedID int) error {
+	for _, contact := range contacts {
+		// if the contact already exists you don't check it for the conflict
+		if contact.ID != allowedID {
+			if contact.Email == email || contact.Phone == phone {
+				log.Println("Contact already exists", contact, "Tried to make", email, phone)
+				return domain.ErrContactAlreadyExists
+			}
+		}
+	}
+	return nil
+}
+
+// No two parties can have the same name
+func checkPartyConflict(parties map[int]domain.Party, name string, allowedID int) error {
+	for _, party := range parties {
+		// if the party already exists you don't check it for the conflict
+		if party.ID != allowedID {
+			if party.Name == name {
+				log.Println("Party already exists", party, "Tried to make", name)
+				return domain.ErrPartyAlreadyExists
+			}
+		}
+	}
+	return nil
+}
+
+// No Two Guests can have the same name in the same party or contact
+func checkGuestConflict(guests map[int]domain.Guest, name string, allowedID int, allowedPartyID int, allowedContactID int) error {
+	for _, guest := range guests {
+		// if the guest already exists you don't check it for the conflict
+		if guest.ID != allowedID && guest.Name == name {
+			if guest.PartyID == allowedPartyID || guest.ContactID != allowedContactID {
+				log.Println("Guest already exists in this scope", guest, "Tried to make", name)
+				return domain.ErrGuestAlreadyExists
+			}
+		}
+	}
+	return nil
+}
+
 // Helpers
 func findPartyByName(parties map[int]domain.Party, name string) *domain.Party {
 	for _, party := range parties {
@@ -52,9 +97,8 @@ func (r *MemoryGuestRepository) CreateParty(name string, partySize int) (*domain
 	defer r.mu.Unlock()
 
 	// Check if the name is already taken
-	if party := findPartyByName(r.parties, name); party != nil {
-		log.Println("Party already exists", party, "Tried to make", name)
-		return party, domain.ErrPartyAlreadyExists
+	if err := checkPartyConflict(r.parties, name, NO_ID); err != nil {
+		return nil, err
 	}
 
 	party := domain.Party{
@@ -73,11 +117,11 @@ func (r *MemoryGuestRepository) UpdateParty(partyID int, name string, partySize 
 	defer r.mu.Unlock()
 
 	// Check if the name is already taken (and not the current party)
-	if party := findPartyByName(r.parties, name); party != nil && party.ID != partyID {
-		log.Println("Party already exists", party, "Tried to alter", name, partyID)
-		return nil, domain.ErrPartyAlreadyExists
+	if err := checkPartyConflict(r.parties, name, partyID); err != nil {
+		return nil, err
 	}
 
+	// Find Party
 	party, ok := r.parties[partyID]
 	if !ok {
 		return nil, domain.ErrPartyNotFound
@@ -95,11 +139,13 @@ func (r *MemoryGuestRepository) DeleteParty(partyID int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Find Party
 	_, ok := r.parties[partyID]
 	if !ok {
 		return domain.ErrPartyNotFound
 	}
 
+	// Ensure delete is allowed
 	for _, guest := range r.guests {
 		if guest.PartyID == partyID {
 			return domain.ErrPartyNotEmpty
@@ -115,6 +161,7 @@ func (r *MemoryGuestRepository) AddGuestsToParty(partyID int, guestIDs []int) er
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Find Party
 	_, ok := r.parties[partyID]
 	if !ok {
 		return domain.ErrPartyNotFound
@@ -131,9 +178,13 @@ func (r *MemoryGuestRepository) AddGuestsToParty(partyID int, guestIDs []int) er
 	}
 
 	// assign party ID to guests
-	for _, guest := range guests {
-		guest.PartyID = partyID
-		r.guests[guest.ID] = *guest
+	for _, guestToAdd := range guests {
+		// Adding guest should not break unique constriant
+		if err := checkGuestConflict(r.guests, guestToAdd.Name, guestToAdd.ID, partyID, guestToAdd.ContactID); err != nil {
+			return err
+		}
+		guestToAdd.PartyID = partyID
+		r.guests[guestToAdd.ID] = *guestToAdd
 	}
 
 	return nil
@@ -144,6 +195,7 @@ func (r *MemoryGuestRepository) GetPartyByID(partyID int) (*domain.Party, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Find a party
 	party, ok := r.parties[partyID]
 	if !ok {
 		return nil, domain.ErrPartyNotFound
@@ -214,9 +266,8 @@ func (r *MemoryGuestRepository) CreateGuestContact(email, phone, phoneCountryCod
 	defer r.mu.Unlock()
 
 	// Check if the contact already exists
-	if contact := findContactByInfo(r.contacts, email, phone); contact != nil {
-		log.Println("Contact already exists", contact, "Tried to make", email, phone)
-		return contact, domain.ErrContactAlreadyExists
+	if err := checkContactConflict(r.contacts, email, phone, NO_ID); err != nil {
+		return nil, err
 	}
 
 	contact := domain.GuestContact{
@@ -234,11 +285,11 @@ func (r *MemoryGuestRepository) UpdateGuestContact(contactID int, email, phone, 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if contact := findContactByInfo(r.contacts, email, phone); contact != nil && contact.ID != contactID {
-		log.Println("Contact already exists", contact, "Tried to alter", email, phone)
-		return nil, domain.ErrContactAlreadyExists
+	if err := checkContactConflict(r.contacts, email, phone, NO_ID); err != nil {
+		return nil, err
 	}
 
+	// Ensure exists
 	contact, ok := r.contacts[contactID]
 	if !ok {
 		return nil, domain.ErrContactNotFound
@@ -256,11 +307,13 @@ func (r *MemoryGuestRepository) DeleteGuestContact(contactID int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Ensure exists
 	_, ok := r.contacts[contactID]
 	if !ok {
 		return domain.ErrContactNotFound
 	}
 
+	// Cascade delete
 	for _, guest := range r.guests {
 		if guest.ContactID == contactID {
 			return domain.ErrContactNotEmpty
@@ -305,35 +358,13 @@ func (r *MemoryGuestRepository) ListGuestsForContact(contactID int) ([]*domain.G
 
 // Helper methods
 
-// FindAllGuestsWithName finds all guests with a given name.
-func findAllGuestsWithName(guests map[int]domain.Guest, name string) []*domain.Guest {
-	matchingGuests := make([]*domain.Guest, 0)
-	for _, guest := range guests {
-		if guest.Name == name {
-			matchingGuests = append(matchingGuests, &guest)
-		}
-	}
-	return matchingGuests
-}
-
 // CreateGuest creates a new guest.
 func (r *MemoryGuestRepository) CreateGuest(name, alias string, contactID, partyID int, attending bool) (*domain.Guest, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Check if the guest already exists
-	if guests := findAllGuestsWithName(r.guests, name); len(guests) > 0 {
-		for _, guest := range guests {
-			if guest.PartyID == partyID {
-				log.Println("Guest with this name already exists in Party", guest, "Tried to make", name)
-				return guest, domain.ErrGuestAlreadyExists
-			}
-			if guest.ContactID == contactID {
-				log.Println("Guest with this name already exists in Contact", guest, "Tried to make", name)
-				return guest, domain.ErrGuestAlreadyExists
-			}
-		}
-
+	if err := checkGuestConflict(r.guests, name, NO_ID, partyID, contactID); err != nil {
+		return nil, err
 	}
 
 	guest := domain.Guest{
@@ -354,22 +385,8 @@ func (r *MemoryGuestRepository) UpdateGuest(guestID int, name, alias string, con
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Check if the guest already exists
-	if guests := findAllGuestsWithName(r.guests, name); len(guests) > 0 {
-		for _, guest := range guests {
-			// don't check the current guest
-			if guest.ID != guestID {
-				if guest.PartyID == partyID {
-					log.Println("Guest with this name already exists in Party", guest, "Tried to alter", name)
-					return nil, domain.ErrGuestAlreadyExists
-				}
-				if guest.ContactID == contactID {
-					log.Println("Guest with this name already exists in Contact", guest, "Tried to alter", name)
-					return nil, domain.ErrGuestAlreadyExists
-				}
-
-			}
-		}
+	if err := checkGuestConflict(r.guests, name, guestID, partyID, contactID); err != nil {
+		return nil, err
 	}
 
 	guest, ok := r.guests[guestID]

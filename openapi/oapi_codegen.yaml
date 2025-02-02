@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+package: genopenapi
+generate:
+  echo-server: true  # Generates Echo-based server handlers
+  strict-server: true # Enables strict request validation
+  models: true # Generates models from OpenAPI schemas
+  embedded-spec: true # Embeds OpenAPI spec in Go code for reference
+output: ./genopenapi/api.gen.go # Output file
+output-options:
+  skip-prune: true  # Removes unused models to keep the code lean
+  # exclude-tags: [internal]  # Excludes endpoints tagged "internal" from generation

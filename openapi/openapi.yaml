@@ -1,0 +1,107 @@
+openapi: 3.0.3
+info:
+  title: Wedding API
+  description: API for managing wedding guests, events, lodging, and travel.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /guests:
+    get:
+      summary: Get all guests
+      operationId: listGuests
+      tags:
+        - guests
+      responses:
+        "200":
+          description: List of guests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Guest"
+
+  /guests/{guestId}:
+    get:
+      summary: Get a specific guest
+      operationId: getGuest
+      tags:
+        - guests
+      parameters:
+        - name: guestId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Guest details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Guest"
+
+  /events:
+    get:
+      summary: Get all wedding events
+      operationId: listEvents
+      tags:
+        - events
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+
+components:
+  schemas:
+    Guest:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        alias:
+          type: string
+        contactId:
+          type: integer
+        partyId:
+          type: integer
+        attending:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        locationId:
+          type: integer
+        when:
+          type: string
+          format: date-time
+        title:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

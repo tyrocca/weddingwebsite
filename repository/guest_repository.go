@@ -2,10 +2,6 @@ package repository
 
 import "weddingwebsite/domain"
 
-var fakeGuest = domain.Guest{}
-var fakeParty = domain.Party{}
-var fakeGuestContact = domain.GuestContact{}
-
 // GuestRepository provides access to the guest data store.
 // Models: Guest, Party, GuestContact
 // Use cases:

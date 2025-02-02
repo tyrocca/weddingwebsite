@@ -1,11 +1,5 @@
 package services
 
-import (
-	"log"
-	"weddingwebsite/domain"
-	"weddingwebsite/repository"
-)
-
 /*
 AdminService provides access to the admin operations.
 
@@ -24,6 +18,12 @@ Use cases:
 
 
 */
+
+import (
+	"log"
+	"weddingwebsite/domain"
+	"weddingwebsite/repository"
+)
 
 type createPartyOp struct {
 	name string `json:"name"`
@@ -61,14 +61,12 @@ type AdminService interface {
 	compoundCreateGuests(op *compoundCreateOperation) ([]*domain.Guest, error)
 }
 
+/////////////////////////////
+// SERVICE IMPLEMENTATION
+/////////////////////////////
+
 type adminService struct {
 	guestRepo repository.GuestRepository
-}
-
-func NewAdminService(guestRepo repository.GuestRepository) AdminService {
-	return &adminService{
-		guestRepo: guestRepo,
-	}
 }
 
 // createParty creates a new party.
@@ -137,4 +135,14 @@ func (s *adminService) compoundCreateGuests(op *compoundCreateOperation) ([]*dom
 	}
 	return guests, nil
 
+}
+
+/* Externally accessible functions */
+
+var _ AdminService = &adminService{}
+
+func NewAdminService(guestRepo repository.GuestRepository) AdminService {
+	return &adminService{
+		guestRepo: guestRepo,
+	}
 }

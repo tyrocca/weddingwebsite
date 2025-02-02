@@ -20,6 +20,15 @@ type Guest struct {
 	Party   *Party        `json:"party,omitempty"`
 }
 
+func (g *Guest) GetParty() *Party {
+	// should this be hydrated?
+	return g.Party
+}
+
+func (g *Guest) GetContact() *GuestContact {
+	return g.Contact
+}
+
 // Unique together? Name + PartyID?
 
 // GuestContact holds contact details for a guest.
